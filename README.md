@@ -9,10 +9,25 @@ Proyecto integrador para el Hospital Regional. Frontend en **React + TypeScript*
 
 ## Instalación
 
+### 1. Backend (API + PostgreSQL)
+
+```bash
+cd backend
+npm install
+cp .env.example .env
+# Editar .env y colocar DATABASE_URL de su servidor PostgreSQL
+npm run dev
+```
+
+API en [http://localhost:3001/api](http://localhost:3001/api) — verificar: `GET /api/health`
+
+### 2. Frontend (React)
+
 ```bash
 cd frontend
 npm install
 cp .env.example .env
+# REACT_APP_USE_MOCK=false y REACT_APP_API_URL=http://localhost:3001/api
 npm start
 ```
 
@@ -25,14 +40,11 @@ La aplicación se abre en [http://localhost:3000](http://localhost:3000).
 | `REACT_APP_API_URL` | URL base del API (ej. `http://localhost:3001/api`) |
 | `REACT_APP_USE_MOCK` | `true` = datos simulados sin backend; `false` = API real |
 
-## Usuarios de prueba (modo mock)
+## Usuarios
 
-| Usuario | Contraseña | Rol |
-|---------|------------|-----|
-| admin | admin123 | administrador |
-| medico1 | medico123 | medico |
-| recepcion | recep123 | recepcionista |
-| auditor | audit123 | auditor |
+Con la base de datos en la nube, use las credenciales definidas en la tabla `usuarios` (ej. usuario `medico1` con la contraseña almacenada en `password_hash`).
+
+Con `REACT_APP_USE_MOCK=true` puede usar: admin/admin123, medico1/medico123, recepcion/recep123, auditor/audit123.
 
 ## Módulos
 
