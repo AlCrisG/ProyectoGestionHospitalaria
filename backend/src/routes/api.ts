@@ -44,8 +44,9 @@ apiRouter.get('/roles', async (_req, res) => {
 // ——— Usuarios ———
 apiRouter.get('/usuarios', async (_req, res) => {
   const { rows } = await pool.query(
+    // Agregamos LIMIT 50 al final
     `SELECT u.id_usuario, u.id_rol, u.username, u.activo, r.nombre, r.descripcion
-     FROM usuarios u JOIN roles r ON u.id_rol = r.id_rol ORDER BY u.id_usuario`
+     FROM usuarios u JOIN roles r ON u.id_rol = r.id_rol ORDER BY u.id_usuario LIMIT 50`
   );
   res.json(
     rows.map((u) => ({
@@ -95,10 +96,11 @@ const PACIENTE_SELECT = `
   SELECT p.*, ts.tipo FROM pacientes p
   LEFT JOIN tipos_sangre ts ON p.id_tipo_sangre = ts.id_tipo_sangre`;
 
-apiRouter.get('/pacientes', async (_req, res) => {
-  const { rows } = await pool.query(`${PACIENTE_SELECT} ORDER BY p.id_paciente`);
-  res.json(rows.map(mapPaciente));
-});
+  apiRouter.get('/pacientes', async (_req, res) => {
+    // Agregamos LIMIT 50 para no saturar la memoria del navegador
+    const { rows } = await pool.query(`${PACIENTE_SELECT} ORDER BY p.id_paciente LIMIT 100`);
+    res.json(rows.map(mapPaciente));
+  });
 
 apiRouter.get('/pacientes/:id', async (req, res) => {
   const { rows } = await pool.query(`${PACIENTE_SELECT} WHERE p.id_paciente = $1`, [req.params.id]);
@@ -219,18 +221,20 @@ const MEDICO_SELECT = `
   SELECT m.*, e.nombre AS especialidad_nombre FROM medicos m
   LEFT JOIN especialidades e ON m.id_especialidad = e.id_especialidad`;
 
-apiRouter.get('/medicos', async (req, res) => {
-  const esp = req.query.especialidadId;
-  let q = `${MEDICO_SELECT}`;
-  const params: unknown[] = [];
-  if (esp) {
-    q += ' WHERE m.id_especialidad = $1';
-    params.push(esp);
-  }
-  q += ' ORDER BY m.id_medico';
-  const { rows } = await pool.query(q, params);
-  res.json(rows.map((r) => mapMedico({ ...r, especialidad_nombre: r.especialidad_nombre })));
-});
+  apiRouter.get('/medicos', async (req, res) => {
+    const esp = req.query.especialidadId;
+    let q = `${MEDICO_SELECT}`;
+    const params: unknown[] = [];
+    if (esp) {
+      q += ' WHERE m.id_especialidad = $1';
+      params.push(esp);
+    }
+    // Agregamos el LIMIT 50 aquí al final de la consulta armada
+    q += ' ORDER BY m.id_medico LIMIT 50';
+    
+    const { rows } = await pool.query(q, params);
+    res.json(rows.map((r) => mapMedico({ ...r, especialidad_nombre: r.especialidad_nombre })));
+  });
 
 apiRouter.post('/medicos', async (req, res) => {
   const { nombre_completo, cedula_profesional, id_especialidad, id_usuario } = req.body;
@@ -268,10 +272,11 @@ const CONSULTA_SELECT = `
   JOIN pacientes p ON c.id_paciente = p.id_paciente
   JOIN medicos m ON c.id_medico = m.id_medico`;
 
-apiRouter.get('/consultas', async (_req, res) => {
-  const { rows } = await pool.query(`${CONSULTA_SELECT} ORDER BY c.fecha_hora DESC`);
-  res.json(rows.map((r) => mapConsulta({ ...r, fecha_hora: toIso(r.fecha_hora) })));
-});
+  apiRouter.get('/consultas', async (_req, res) => {
+    // Agregamos LIMIT 50 al final de la consulta
+    const { rows } = await pool.query(`${CONSULTA_SELECT} ORDER BY c.fecha_hora DESC LIMIT 50`);
+    res.json(rows.map((r) => mapConsulta({ ...r, fecha_hora: toIso(r.fecha_hora) })));
+  });
 
 apiRouter.get('/consultas/:id', async (req, res) => {
   const { rows } = await pool.query(`${CONSULTA_SELECT} WHERE c.id_consulta = $1`, [req.params.id]);
@@ -280,8 +285,9 @@ apiRouter.get('/consultas/:id', async (req, res) => {
 });
 
 apiRouter.get('/consultas/paciente/:pacienteId', async (req, res) => {
+  // Agregamos LIMIT 50 también a la búsqueda por paciente
   const { rows } = await pool.query(
-    `${CONSULTA_SELECT} WHERE c.id_paciente = $1 ORDER BY c.fecha_hora DESC`,
+    `${CONSULTA_SELECT} WHERE c.id_paciente = $1 ORDER BY c.fecha_hora DESC LIMIT 50`,
     [req.params.pacienteId]
   );
   res.json(rows.map((r) => mapConsulta({ ...r, fecha_hora: toIso(r.fecha_hora) })));
@@ -317,7 +323,8 @@ apiRouter.get('/estados-consulta', async (_req, res) => {
 
 // ——— Medicamentos ———
 apiRouter.get('/medicamentos', async (_req, res) => {
-  const { rows } = await pool.query('SELECT * FROM medicamentos ORDER BY id_medicamento');
+  // Agregamos LIMIT 50 al final de la consulta
+  const { rows } = await pool.query('SELECT * FROM medicamentos ORDER BY id_medicamento LIMIT 50');
   res.json(rows);
 });
 
@@ -341,7 +348,7 @@ apiRouter.put('/medicamentos/:id', async (req, res) => {
 apiRouter.get('/recetas', async (_req, res) => {
   const { rows } = await pool.query(
     `SELECT r.*, m.nombre AS med_nombre, m.sustancia_activa, m.stock
-     FROM recetas r JOIN medicamentos m ON r.id_medicamento = m.id_medicamento`
+     FROM recetas r JOIN medicamentos m ON r.id_medicamento = m.id_medicamento LIMIT 50`
   );
   res.json(
     rows.map((r) => ({
@@ -358,10 +365,9 @@ apiRouter.get('/recetas', async (_req, res) => {
 apiRouter.get('/recetas/paciente/:pacienteId', async (req, res) => {
   const { rows } = await pool.query(
     `SELECT r.*, m.nombre AS med_nombre, m.sustancia_activa, m.stock
-     FROM recetas r
-     JOIN medicamentos m ON r.id_medicamento = m.id_medicamento
+     FROM recetas r JOIN medicamentos m ON r.id_medicamento = m.id_medicamento
      JOIN consultas c ON r.id_consulta = c.id_consulta
-     WHERE c.id_paciente = $1`,
+     WHERE c.id_paciente = $1 LIMIT 50`,
     [req.params.pacienteId]
   );
   res.json(
@@ -427,11 +433,9 @@ apiRouter.get('/estudios-laboratorio', async (_req, res) => {
     `SELECT el.*, l.nombre_estudio, l.descripcion,
       p.nombre AS pn, p.apellido_paterno AS pap, p.apellido_materno AS pam,
       m.nombre AS mn, m.apellido_paterno AS map, m.apellido_materno AS mam
-     FROM estudios_laboratorio el
-     JOIN laboratorios l ON el.id_laboratorio = l.id_laboratorio
-     JOIN pacientes p ON el.id_paciente = p.id_paciente
-     JOIN medicos m ON el.id_medico = m.id_medico
-     ORDER BY el.fecha_solicitud DESC`
+     FROM estudios_laboratorio el JOIN laboratorios l ON el.id_laboratorio = l.id_laboratorio
+     JOIN pacientes p ON el.id_paciente = p.id_paciente JOIN medicos m ON el.id_medico = m.id_medico
+     ORDER BY el.fecha_solicitud DESC LIMIT 50`
   );
   res.json(
     rows.map((r) => ({
@@ -452,7 +456,7 @@ apiRouter.get('/estudios-laboratorio/paciente/:pacienteId', async (req, res) => 
   const { rows } = await pool.query(
     `SELECT el.*, l.nombre_estudio, l.descripcion FROM estudios_laboratorio el
      JOIN laboratorios l ON el.id_laboratorio = l.id_laboratorio
-     WHERE el.id_paciente = $1`,
+     WHERE el.id_paciente = $1 LIMIT 50`,
     [req.params.pacienteId]
   );
   res.json(
@@ -489,7 +493,7 @@ apiRouter.put('/estudios-laboratorio/:id', async (req, res) => {
 apiRouter.get('/hospitalizaciones', async (_req, res) => {
   const { rows } = await pool.query(
     `SELECT h.*, p.nombre, p.apellido_paterno, p.apellido_materno FROM hospitalizaciones h
-     JOIN pacientes p ON h.id_paciente = p.id_paciente ORDER BY h.fecha_ingreso DESC`
+     JOIN pacientes p ON h.id_paciente = p.id_paciente ORDER BY h.fecha_ingreso DESC LIMIT 50`
   );
   res.json(
     rows.map((h) => ({
@@ -506,7 +510,7 @@ apiRouter.get('/hospitalizaciones', async (_req, res) => {
 
 apiRouter.get('/hospitalizaciones/paciente/:pacienteId', async (req, res) => {
   const { rows } = await pool.query(
-    'SELECT * FROM hospitalizaciones WHERE id_paciente = $1 ORDER BY fecha_ingreso DESC',
+    'SELECT * FROM hospitalizaciones WHERE id_paciente = $1 ORDER BY fecha_ingreso DESC LIMIT 50',
     [req.params.pacienteId]
   );
   res.json(rows.map((h) => ({ ...h, fecha_ingreso: toIso(h.fecha_ingreso), fecha_egreso: h.fecha_egreso ? toIso(h.fecha_egreso) : undefined })));
@@ -526,7 +530,7 @@ apiRouter.post('/hospitalizaciones', async (req, res) => {
 apiRouter.get('/facturas', async (_req, res) => {
   const { rows } = await pool.query(
     `SELECT f.*, p.nombre, p.apellido_paterno, p.apellido_materno FROM facturas f
-     JOIN pacientes p ON f.id_paciente = p.id_paciente ORDER BY f.fecha_emision DESC`
+     JOIN pacientes p ON f.id_paciente = p.id_paciente ORDER BY f.fecha_emision DESC LIMIT 50`
   );
   res.json(
     rows.map((f) => ({
@@ -561,15 +565,14 @@ apiRouter.put('/facturas/:id', async (req, res) => {
 
 // ——— Pagos ———
 apiRouter.get('/pagos', async (_req, res) => {
-  const { rows } = await pool.query('SELECT * FROM pagos ORDER BY fecha_pago DESC');
+  const { rows } = await pool.query('SELECT * FROM pagos ORDER BY fecha_pago DESC LIMIT 50');
   res.json(rows.map((p) => ({ ...p, monto: Number(p.monto), fecha_pago: toIso(p.fecha_pago) })));
 });
 
 apiRouter.get('/pagos/paciente/:pacienteId', async (req, res) => {
   const { rows } = await pool.query(
-    `SELECT pg.* FROM pagos pg
-     JOIN facturas f ON pg.id_factura = f.id_factura
-     WHERE f.id_paciente = $1`,
+    `SELECT pg.* FROM pagos pg JOIN facturas f ON pg.id_factura = f.id_factura
+     WHERE f.id_paciente = $1 LIMIT 50`,
     [req.params.pacienteId]
   );
   res.json(rows.map((p) => ({ ...p, monto: Number(p.monto), fecha_pago: toIso(p.fecha_pago) })));
@@ -632,12 +635,10 @@ apiRouter.get('/respaldos', async (_req, res) => {
   );
 });
 
-apiRouter.post('/respaldos', async (req, res) => {
-  const { tipo, ruta_archivo, estatus, fecha_inicio, fecha_fin, tamano_mb } = req.body;
+apiRouter.get('/respaldos', async (_req, res) => {
   const { rows } = await pool.query(
-    `INSERT INTO respaldos_realizados (fecha_inicio, fecha_fin, tipo, ruta_archivo, "tamaño_mb", estatus)
-     VALUES (COALESCE($1::timestamptz,NOW()), $2, $3, $4, $5, $6) RETURNING id_respaldo, fecha_inicio, fecha_fin, tipo, ruta_archivo, "tamaño_mb" AS tamano_mb, estatus`,
-    [fecha_inicio, fecha_fin, tipo, ruta_archivo, tamano_mb, estatus]
+    `SELECT id_respaldo, fecha_inicio, fecha_fin, tipo, ruta_archivo, "tamaño_mb" AS tamano_mb, estatus 
+     FROM respaldos_realizados ORDER BY fecha_inicio DESC LIMIT 50`
   );
   res.status(201).json(rows[0]);
 });
