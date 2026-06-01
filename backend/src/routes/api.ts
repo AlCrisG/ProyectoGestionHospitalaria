@@ -20,7 +20,7 @@ apiRouter.get('/dashboard/stats', async (_req, res) => {
     const [p, c, f, m] = await Promise.all([
       pool.query('SELECT COUNT(*)::int AS n FROM pacientes'),
       pool.query(`SELECT COUNT(*)::int AS n FROM consultas WHERE fecha_hora::date = CURRENT_DATE`),
-      pool.query(`SELECT COUNT(*)::int AS n FROM facturas WHERE estado = 'pendiente'`),
+      pool.query(`SELECT COUNT(*)::int AS n FROM facturas WHERE LOWER(estado) = 'pendiente'`),
       pool.query(`SELECT COUNT(*)::int AS n FROM medicamentos WHERE stock < 10`),
     ]);
     res.json({
@@ -623,7 +623,7 @@ apiRouter.get('/auditoria/cambios', async (_req, res) => {
 apiRouter.get('/respaldos', async (_req, res) => {
   const { rows } = await pool.query(
     `SELECT id_respaldo, fecha_inicio, fecha_fin, tipo, ruta_archivo,
-            "tamaño_mb" AS tamano_mb, estatus FROM respaldos_realizados ORDER BY fecha_inicio DESC`
+            "tamaño_mb" AS tamano_mb, estatus FROM respaldos_realizados ORDER BY fecha_inicio DESC LIMIT 50`
   );
   res.json(
     rows.map((r) => ({
@@ -635,10 +635,17 @@ apiRouter.get('/respaldos', async (_req, res) => {
   );
 });
 
-apiRouter.get('/respaldos', async (_req, res) => {
+apiRouter.post('/respaldos', async (req, res) => {
+  const { fecha_inicio, fecha_fin, tipo, ruta_archivo, tamano_mb, estatus } = req.body;
   const { rows } = await pool.query(
-    `SELECT id_respaldo, fecha_inicio, fecha_fin, tipo, ruta_archivo, "tamaño_mb" AS tamano_mb, estatus 
-     FROM respaldos_realizados ORDER BY fecha_inicio DESC LIMIT 50`
+    `INSERT INTO respaldos_realizados (fecha_inicio, fecha_fin, tipo, ruta_archivo, "tamaño_mb", estatus)
+     VALUES (COALESCE($1::timestamptz, NOW()), $2, $3, $4, $5, $6) RETURNING *, "tamaño_mb" AS tamano_mb`,
+    [fecha_inicio, fecha_fin || null, tipo, ruta_archivo, tamano_mb || null, estatus]
   );
-  res.status(201).json(rows[0]);
+  res.status(201).json({
+    ...rows[0],
+    fecha_inicio: toIso(rows[0].fecha_inicio),
+    fecha_fin: rows[0].fecha_fin ? toIso(rows[0].fecha_fin) : undefined,
+    tamano_mb: rows[0].tamano_mb ? Number(rows[0].tamano_mb) : undefined,
+  });
 });
